@@ -1,0 +1,530 @@
+---
+title: "Raport - karłowacenie śledzi"
+author: "Bartosz Kowalski 141254"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Raport przedstawia analizę możliwych przyczyn karłowacenia śledzia oceanicznego wyławianego w Europie.
+
+# Executive summary
+Jest wiele powodów, dlaczego śledzie oceaniczne w Europie maleją. Poniższy raport przedstawia najbardziej prawdopodobne hipotezy, opierając się na zebranych danych. Zmiana temperatury przy powierzchni wody oraz intensywność połowów przez człowieka okazały się najbardziej istotne. Zaprezentowany w analizie regresor dobrze poradził sobie z zadaniem. Model pozwala w zadowalający sposób przewidzieć długość śledzia dla danych wartości atrybutów. W celu uzyskania bardziej obiektywnych rezultatów analizy, należałoby zebrać więcej obserwacji oraz uzupełnić je o czas pomiaru oraz dodatkowe atrybuty. Jakość pomiarów w wielu przypadkach nie jest również odpowiednio dokładna, ponieważ większość atrybutów posiada jedynie około 50 różnych wartości. 
+
+
+# Wykorzystane biblioteki
+W celu wykonania analizy zostało użytych wiele bibliotek:
+```{r libraries, message=FALSE, warning=FALSE}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(kableExtra)
+library(tidyr)
+library(tidyverse)
+library(plotly)
+```
+
+# Powtarzalne wyniki
+W celu uzyskania takich samych rezultatów przy ponownych wykonaniach skryptu na tych samych danych, ustalono ziarno na losową liczbę.
+```{r}
+set.seed(23)
+```
+
+
+# Wczytanie danych z pliku.
+Dane znajdują się w jednym pliku formatu csv - 'sledzie.csv'. Wartości puste zostały reprezentowane poprzez znak '?'.
+```{r, message=FALSE, warning=FALSE}
+sledzie_df <- read.csv(
+  "sledzie.csv",
+  col.names = c("lp", "length", "cfin1", "cfin2", "chel1", "chel2", "lcop1", "lcop2", "fbar", "recr", "cumf", "totaln", "sst", "sal", "xmonth", "nao"),
+  na.strings = "?"
+)
+sledzie_df <- sledzie_df[-c(1)]
+sledzie_df <- tbl_df(sledzie_df)
+```
+
+W poniższej tabeli zaprezentowanych zostało kilka pierwszych rekordów zbioru:
+
+```{r, echo=FALSE}
+kable(head(sledzie_df, 8)) %>%
+  kable_styling("striped") %>%
+  scroll_box(height="360px")
+```
+
+# Obsługa brakujących danych
+W celu zapewnienia poprawnych wyników obliczeń, zdecydowano się na usunięcie rekordów zawierających brakujące wartości. 
+```{r}
+sledzie_df <- na.omit(sledzie_df)
+kable(head(sledzie_df, 8)) %>%
+  kable_styling("striped") %>%
+  scroll_box(height="360px")
+```
+
+# Rozmiar zbioru i podstawowe statystyki
+Po wstępnym przetwarzaniu, zbiór obserwacji śledzi składa się z 42488 rekordów oraz 15 atrybutów. 
+```{r}
+dim(sledzie_df)
+```
+
+Podstawowe statystyki dla atrybutów zbioru:
+```{r}
+kable(summary(sledzie_df)) %>%
+  kable_styling("striped") %>%
+  scroll_box(height="425px")
+```
+
+# Szczegółowa analiza wartości atrybutów
+
+## length
+Interpretacja atrybutu: długość złowionego śledzia [cm]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+length <- data.frame(length=sledzie_df$length)
+kable(summary(length)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(length))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(length))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(length, aes(x=length, fill="#2c7fb8")) + geom_histogram(binwidth = 0.5) + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## cfin1
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie Calanus finmarchicus gat. 1]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+cfin1 <- data.frame(cfin1=sledzie_df$cfin1)
+kable(summary(cfin1)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(cfin1))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(cfin1))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(cfin1, aes(x=cfin1, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## cfin2
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie Calanus finmarchicus gat. 2]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+cfin2 <- data.frame(cfin2=sledzie_df$cfin2)
+kable(summary(cfin2)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(cfin2))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(cfin2))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(cfin2, aes(x=cfin2, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## chel1
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie Calanus helgolandicus gat. 1]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+chel1 <- data.frame(chel1=sledzie_df$chel1)
+kable(summary(chel1)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(chel1))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(chel1))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(chel1, aes(x=chel1, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## chel2
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie Calanus helgolandicus gat. 2]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+chel2 <- data.frame(chel2=sledzie_df$chel2)
+kable(summary(chel2)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(chel2))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(chel2))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(chel2, aes(x=chel2, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## lcop1
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie widłonogów gat. 1]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+lcop1 <- data.frame(lcop1=sledzie_df$lcop1)
+kable(summary(lcop1)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(lcop1))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(lcop1))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(lcop1, aes(x=lcop1, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## lcop2
+Interpretacja atrybutu: dostępność planktonu [zagęszczenie widłonogów gat. 2]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+lcop2 <- data.frame(lcop2=sledzie_df$lcop2)
+kable(summary(lcop2)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(lcop2))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(lcop2))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(lcop2, aes(x=lcop2, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## fbar
+Interpretacja atrybutu: natężenie połowów w regionie [ułamek pozostawionego narybku]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+fbar <- data.frame(fbar=sledzie_df$fbar)
+kable(summary(fbar)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(fbar))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(fbar))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(fbar, aes(x=fbar, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## recr
+Interpretacja atrybutu: roczny narybek [liczba śledzi]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+recr <- data.frame(recr=sledzie_df$recr)
+kable(summary(recr)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(recr))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(recr))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(recr, aes(x=recr, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## cumf
+Interpretacja atrybutu: łączne roczne natężenie połowów w regionie [ułamek pozostawionego narybku]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+cumf <- data.frame(cumf=sledzie_df$cumf)
+kable(summary(cumf)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(cumf))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(cumf))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(cumf, aes(x=cumf, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## totaln
+Interpretacja atrybutu: łączna liczba ryb złowionych w ramach połowu [liczba śledzi]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+totaln <- data.frame(totaln=sledzie_df$totaln)
+kable(summary(totaln)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(totaln))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(totaln))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(totaln, aes(x=totaln, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## sst
+Interpretacja atrybutu: temperatura przy powierzchni wody [°C]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+sst <- data.frame(sst=sledzie_df$sst)
+kable(summary(sst)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(sst))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(sst))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(sst, aes(x=sst, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## sal
+Interpretacja atrybutu: poziom zasolenia wody [Knudsen ppt]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+sal <- data.frame(sal=sledzie_df$sal)
+kable(summary(sal)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(sal))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(sal))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(sal, aes(x=sal, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## xmonth
+Interpretacja atrybutu: miesiąc połowu [numer miesiąca]
+
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+xmonth <- data.frame(xmonth=sledzie_df$xmonth)
+kable(summary(xmonth)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(xmonth))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(xmonth))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(xmonth, aes(x=xmonth, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+## nao
+Interpretacja atrybutu: oscylacja północnoatlantycka [mb]
+Podstawowe statystyki:
+```{r, message=FALSE, warning=FALSE}
+nao <- data.frame(nao=sledzie_df$nao)
+kable(summary(nao)) %>%
+  kable_styling("striped")
+```
+W całym zbiorze znajduje się `r {nrow(distinct(nao))}` różnych wartości atrybutu.
+```{r}
+nrow(distinct(nao))
+```
+Histogram rozkładu występowania wartości w zbiorze:
+```{r, message=FALSE, warning=FALSE}
+ggplot(nao, aes(x=nao, fill="#2c7fb8")) + geom_histogram() + theme_minimal() + theme(legend.position = "none") + labs(y="Liczba wystąpień")
+```
+
+
+# Korelacje między zmiennymi
+W tabeli przedstawiono korelacje między wszystkimi atrybutami w zbiorze. Jest ona posortowana malejąco od wartości bezwględnej, ponieważ to właśnie ta wielkość świadczy o sile zależności liniowej.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cor_matrix <- cor(
+  sledzie_df,
+  use = "pairwise.complete.obs"
+)
+cor_list <- cor_matrix
+cor_list[!lower.tri(cor_list)] <- NA
+data.frame(cor_list) %>% 
+  rownames_to_column() %>% 
+  gather(key="variable", value="correlation", -rowname) %>% 
+  filter(abs(correlation) > 0) %>%
+  arrange(desc(abs(correlation))) %>%
+  kable %>%
+  kable_styling(c("striped", "hover")) %>%
+  scroll_box(height = "450px")
+```
+
+Wykres przedstawia graficzną reprezentację powyższej tabeli. Im silniejszy związek, tym ciemniejszy jest kolor na przecięciu dwóch zmiennych.
+
+```{r, fig.width=8, fig.height=8}
+cor_plot <- data.frame(cor_matrix) %>%
+  rownames_to_column() %>%
+  pivot_longer(-rowname, names_to="colname") %>%
+  ggplot(aes(rowname, colname, fill = value)) + 
+  geom_tile() + 
+  scale_fill_gradient2() +
+  theme(axis.text.x = element_text(angle = 90),
+        axis.title.x = element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) + coord_flip()
+ggplotly(cor_plot)
+```
+Warto zwrócić uwagę na pierwszy rząd, reprezentujący korelacje ze zmienną 'xmonth', informującą o miesiącu połowu śledzia. Jego korelacja ze wszystkimi innymi atrybutami jest bliska zeru, co świadczy o braku zależności liniowej pomiędzy porą roku, a warunkami występującymi w morzu oraz częstością połowów przez ludzi.
+
+# Interaktywny wykres zmiany rozmiaru śledzi w czasie
+```{r, warning=FALSE, message=FALSE}
+plot_data <- sledzie_df %>%
+  mutate(row_index=1:nrow(sledzie_df) %/% 50) %>%
+  group_by(row_index) %>%
+  summarise(mean_length=mean(length)) 
+
+p <- ggplot(plot_data, aes(x=row_index, y=mean_length)) + geom_point(aes(alpha=0.01)) + geom_smooth() + labs(x="Upływ czasu", y="Średnia długość") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggplotly(p)
+```
+Średnia długość śledzia wraz z kolejnymi pomiarami zaczęła najpierw rosnąć, a następnie od około 1/3 do końca pomiarów monotonicznie maleć. Przy tworzeniu wykresu założono, że dane w zbiorze zostały uzupełniane w sposób przyrostowy. W celu uproszczenia wykresu oraz uogólnienia trendu, wykonane zostało uśrednienie wartości długości śledzia dla grup 50 kolejnych śledzi.
+
+
+# Regresor przewidujący rozmiar śledzia
+Dane wejściowe zostały podzielone na dane uczące (75%), walidujące i testowe. 
+```{r}
+inTraining <- createDataPartition(
+  y = sledzie_df$length,
+  # procent w zbiorze uczącym
+  p = .75,
+  list = FALSE
+)
+training <- sledzie_df[inTraining, ]
+testing <- sledzie_df[-inTraining, ]
+```
+
+Wykonana została powtórzona ocena krzyżowa.
+```{r}
+ctrl <- trainControl(
+    # powtórzona ocena krzyżowa
+    method = "repeatedcv",
+    # liczba podziałów
+    number = 2,
+    # liczba powtórzeń
+    repeats = 5,
+    search="random"
+)
+```
+
+W budowie regresora zastosowany został algorytm Random forest. Użyta została optymalizacja parametrów w celu uzyskania możliwie najlepszych wyników.
+```{r}
+rfGrid <- expand.grid(mtry = 2:5)
+
+fitTune <- train(
+  length ~ .,
+  data = training,
+  method = "rf",
+  trControl = ctrl,
+  tuneGrid = rfGrid,
+  # Paramter dla algorytmu uczącego
+  ntree = 30
+)
+
+fitTune
+```
+Zgodnie z powyższymi informacjami z wyniku uczenia, wybrany został model dla wartości <> parametru mtry. Miara RMSE oraz R^2 dla zbioru walidującego to odpowiednio: <> oraz <>.
+```{r}
+predictions <- predict(fitTune, newdata = testing)
+results <- data.frame(predictions=predictions, testing=testing$length)
+ggplot(results, aes(x=1:nrow(results), y=testing - predictions)) + geom_point() + labs(x="Kolejne obserwacje w zbiorze testowym", y="Odchylenie od danych testowych")
+```
+
+Po zbudowaniu modelu, został on przetestowany na zbiorze testowym. Powyższy wykres przedstawia różnice między wartością oczekiwaną, a przewidzianą przez algorytm. 
+```{r}
+errors <- data.frame(errors = results$testing - results$predictions)
+ggplot(errors, aes(x=errors)) + geom_histogram(binwidth = 0.25) + labs(x="Różnica", y="Liczność")
+```
+
+Jak możemy zauważyć na kolejnym wykresie, liczność poszczególnych błędów układa się w kształt zbliżony do rozkładu normalnego, ze środkiem w punkcie 0.
+```{r}
+total = length(errors[, 1])
+mean = mean(errors[, 1])
+sd = sd(errors[, 1])
+
+pData <- function(nSD){
+  lo = mean - nSD/2*sd
+  hi = mean + nSD/2*sd
+  percent = sum(errors[, 1]>=lo & errors[, 1]<=hi)/total *100
+  percent
+}
+```
+Procent danych w przedziale jednego, dwóch oraz trzech odchyleń standardowych to odpowiednio: `r {round(pData(1),2)}`%, `r {round(pData(2),2)}`% oraz `r {round(pData(3),2)}`%.
+```{r}
+RMSE(results$predictions, results$testing)
+```
+Miara RMSE dla zbioru testowego to: `r {RMSE(results$predictions, results$testing)}`
+```{r}
+rsq <- function(x, y) {
+  cor(x, y) ^ 2
+}
+rsq(results$predictions, results$testing)
+```
+Miara R^2 dla zbioru testowego to: `r {rsq(results$predictions, results$testing)}`
+
+# Analiza ważności atrybutów najlepszego znalezionego modelu regresji
+```{r}
+ggplot(varImp(fitTune))
+```
+
+Ekstraktując ważności atrybutów z modelu, możemy zauważyć że zdecydowanie wyróżniającym się jest sst - temperatura przy powierzchni wody. Kolejnymi zauważalnie większymi od pozostałych są fbar - natężenie połowów w regionie oraz totaln - łączna liczba ryb złowionych w ramach połowu. Intuicja podpowiada nam, że jest to logiczne i uzasadnialne. Wraz ze wzrostem temperatury, zmieniają się parametry środowiska życia śledzi, co może przekładać się na pogorszenie warunkóW ich bytowania i w konsekwencji utrudniony wzrost. Liczba wyłowionych przez ludzi ryb jest również kluczowa, ponieważ śledzie mają mniej czasu na odbudowanie populacji i dorośnięcie do odpowiednich rozmiaróW Pozostałe atrybuty zostały sklasyfikowane jako te, o małym znaczeniu w porównaniu do wcześniej wymienionych. 
+
+Poniższe wykresy są porównaniem 3 atrybutów z największym znaczeniem wraz ze średnią długością sledzia. Możemy na nich zauważyć korelacje pomiędzy zmianami wielkości ryb, a pozostałymi zmiennymi.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+length_data <- sledzie_df %>%
+  mutate(row_index=1:nrow(sledzie_df) %/% 50) %>%
+  group_by(row_index) %>%
+  summarise(mean_length=mean(length)) 
+
+p <- ggplot(length_data, aes(x=row_index, y=mean_length)) + geom_point(aes(alpha=0.01)) + geom_smooth() + labs(x="Upływ czasu", y="Średnia długość") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggplotly(p)
+```
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+plot_data <- sledzie_df %>%
+  mutate(row_index=1:nrow(sledzie_df) %/% 50) %>%
+  group_by(row_index) %>%
+  summarise(mean_sst=mean(sst)) 
+
+p <- ggplot(plot_data, aes(x=row_index, y=mean_sst)) + geom_point(aes(alpha=0.01)) + geom_smooth() + labs(x="Upływ czasu", y="Średnie sst") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggplotly(p)
+```
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+fbar_data <- sledzie_df %>%
+  mutate(row_index=1:nrow(sledzie_df) %/% 50) %>%
+  group_by(row_index) %>%
+  summarise(mean_fbar=mean(fbar)) 
+
+p <- ggplot(fbar_data, aes(x=row_index, y=mean_fbar)) + geom_point(aes(alpha=0.01)) + geom_smooth() + labs(x="Upływ czasu", y="Średnie fbar") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggplotly(p)
+```
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+totaln_data <- sledzie_df %>%
+  mutate(row_index=1:nrow(sledzie_df) %/% 50) %>%
+  group_by(row_index) %>%
+  summarise(mean_totaln=mean(totaln)) 
+
+p <- ggplot(totaln_data, aes(x=row_index, y=mean_totaln)) + geom_point(aes(alpha=0.01)) + geom_smooth() + labs(x="Upływ czasu", y="Średnie totaln") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggplotly(p)
+```
